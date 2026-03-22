@@ -88,15 +88,16 @@ func (d *Dumper) DumpChannel(ctx context.Context, channelID string) error {
 		return err
 	}
 
-	if maxID > st.LastMessageID {
+	if lastSuccessfullyWrittenID > st.LastMessageID {
 		st.ChannelID = chat.Id
 		st.ChannelName = chat.Title
-		st.LastMessageID = maxID
+		st.LastMessageID = lastSuccessfullyWrittenID
 		st.LastDumpTime = time.Now().UTC()
 		st.TotalMessagesDumped += int64(processed)
 		if saveErr := state.Save(outDir, st); saveErr != nil {
 			slog.Warn("failed to save state", "err", saveErr)
 		}
+	}
 	}
 
 	slog.Info("channel dump complete",

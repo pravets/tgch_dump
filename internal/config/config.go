@@ -48,8 +48,8 @@ type OutputConfig struct {
 
 // DumpConfig controls dump behaviour.
 type DumpConfig struct {
-	// Only dump messages newer than the last saved state
-	Incremental bool `yaml:"incremental"`
+	// Only dump messages newer than the last saved state (default: true)
+	Incremental *bool `yaml:"incremental"`
 	// Messages requested per GetChatHistory call (max 100)
 	MessagesPerBatch int32 `yaml:"messages_per_batch"`
 	// Milliseconds to sleep between GetChatHistory requests
@@ -69,7 +69,71 @@ func Load(path string) (*Config, error) {
 	expanded := os.ExpandEnv(string(data))
 
 	var cfg Config
-	if err := yaml.Unmarshal([]byte(expanded), &cfg); err != nil {
+	dec := yaml.NewDecoder(strings.NewReader(expanded))
+	dec.KnownFields(true)
+	if err := dec.Decode(&cfg); err != nil {
+		return nil, fmt.Errorf("parse config: %w", err)
+	}
+
+	cfg.applyDefaults()
+
+	if err := cfg.validate(); err != nil {
+		return nil, fmt.Errorf("invalid config: %w", err)
+	}
+
+	return &cfg, nil
+}
+
+func (c *Config) applyDefaults() {
+	if c.Telegram.DatabaseDir == "" {
+		c.Telegram.DatabaseDir = ".tdlib/db"
+	}
+	if c.Telegram.FilesDir == "" {
+		c.Telegram.FilesDir = ".tdlib/files"
+	}
+	if c.Output.Dir == "" {
+		c.Output.Dir = "./output"
+	}
+	if c.Dump.MessagesPerBatch <= 0 || c.Dump.MessagesPerBatch > 100 {
+		c.Dump.MessagesPerBatch = 100
+	}
+	if c.Dump.RequestDelayMs <= 0 {
+		c.Dump.RequestDelayMs = 150
+	}
+	if c.Dump.MaxConcurrentDownloads <= 0 {
+		c.Dump.MaxConcurrentDownloads = 3
+	}
+	if len(c.Output.MediaTypes) == 0 {
+		c.Output.MediaTypes = []string{"photo", "video", "audio", "voice_note", "document"}
+	}
+}
+
+func (c *Config) validate() error {
+	if c.Telegram.APIID == 0 {
+		return fmt.Errorf("telegram.api_id is required")
+	}
+	if c.Telegram.APIHash == "" {
+		return fmt.Errorf("telegram.api_hash is required")
+	}
+	if len(c.Channels) == 0 {
+		return fmt.Errorf("at least one channel must be listed under 'channels'")
+	}
+	for i, ch := range c.Channels {
+		if strings.TrimSpace(ch) == "" {
+			return fmt.Errorf("channels[%d] must not be empty", i)
+		}
+	}
+	return nil
+}
+	}
+
+	// Expand environment variables inside the YAML.
+	expanded := os.ExpandEnv(string(data))
+
+	var cfg Config
+	dec := yaml.NewDecoder(strings.NewReader(expanded))
+	dec.KnownFields(true)
+	if err := dec.Decode(&cfg); err != nil {
 		return nil, fmt.Errorf("parse config: %w", err)
 	}
 

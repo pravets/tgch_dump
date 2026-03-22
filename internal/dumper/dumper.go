@@ -86,15 +86,15 @@ func (d *Dumper) DumpChannel(ctx context.Context, channelID string) error {
 		stopAtID = st.LastMessageID
 	}
 
-	processed, maxID, err := d.fetchMessages(ctx, chat, outDir, stopAtID, urlBase)
+	processed, lastWrittenID, err := d.fetchMessages(ctx, chat, outDir, stopAtID, urlBase)
 	if err != nil {
 		return err
 	}
 
-	if maxID > st.LastMessageID {
+	if lastWrittenID > st.LastMessageID {
 		st.ChannelID = chat.Id
 		st.ChannelName = chat.Title
-		st.LastMessageID = maxID
+		st.LastMessageID = lastWrittenID
 		st.LastDumpTime = time.Now().UTC()
 		st.TotalMessagesDumped += int64(processed)
 		if saveErr := state.Save(outDir, st); saveErr != nil {
@@ -123,7 +123,7 @@ func (d *Dumper) fetchMessages(
 	outDir string,
 	stopAtID int64,
 	urlBase string,
-) (processed int, maxID int64, err error) {
+) (processed int, lastWrittenID int64, err error) {
 	var fromMessageID int64
 	delay := time.Duration(d.cfg.Dump.RequestDelayMs) * time.Millisecond
 
@@ -138,6 +138,11 @@ func (d *Dumper) fetchMessages(
 			slog.Warn("skipping album", "album_id", pending.albumID, "err", procErr)
 		} else {
 			processed++
+			for _, m := range pending.messages {
+				if m.Id > lastWrittenID {
+					lastWrittenID = m.Id
+				}
+			}
 		}
 		pending = nil
 	}
@@ -172,9 +177,6 @@ func (d *Dumper) fetchMessages(
 				done = true
 				break
 			}
-			if msg.Id > maxID {
-				maxID = msg.Id
-			}
 			fromMessageID = msg.Id
 
 			albumID := int64(msg.MediaAlbumId)
@@ -185,6 +187,9 @@ func (d *Dumper) fetchMessages(
 					slog.Warn("skipping message", "id", msg.Id, "err", procErr)
 				} else {
 					processed++
+					if msg.Id > lastWrittenID {
+						lastWrittenID = msg.Id
+					}
 				}
 			} else {
 				// Album message — accumulate into buffer.

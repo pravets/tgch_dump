@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 env:
-  TDLIB_TAG: v1.8.62
+  TDLIB_COMMIT: 0ae923c493bceb75433de2682ba8ae29cc7bf88d
 
 jobs:
   build:
@@ -36,7 +36,7 @@ jobs:
             /usr/local/lib/libtd*
             /usr/local/lib/libtdjson*
             /usr/local/include/td
-          key: tdlib-${{ env.TDLIB_TAG }}-${{ matrix.runner }}
+          key: tdlib-${{ env.TDLIB_COMMIT }}-${{ matrix.runner }}
 
       - name: Install build dependencies
         if: steps.cache-tdlib.outputs.cache-hit != 'true'
@@ -47,8 +47,9 @@ jobs:
       - name: Build TDLib
         if: steps.cache-tdlib.outputs.cache-hit != 'true'
         run: |
-          git clone --depth 1 --branch ${{ env.TDLIB_TAG }} https://github.com/tdlib/td.git /tmp/tdlib-src
+          git clone https://github.com/tdlib/td.git /tmp/tdlib-src
           cd /tmp/tdlib-src
+          git checkout ${{ env.TDLIB_COMMIT }}
           mkdir build && cd build
           cmake -DCMAKE_BUILD_TYPE=Release ..
           make -j$(nproc)

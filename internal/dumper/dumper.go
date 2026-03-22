@@ -82,7 +82,7 @@ func (d *Dumper) DumpChannel(ctx context.Context, channelID string) error {
 	}
 
 	var stopAtID int64
-	if d.cfg.Dump.Incremental {
+	if d.cfg.Dump.Incremental == nil || *d.cfg.Dump.Incremental {
 		stopAtID = st.LastMessageID
 	}
 

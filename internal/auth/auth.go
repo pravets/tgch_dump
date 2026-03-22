@@ -79,7 +79,7 @@ func interactCLI(
 				scanner.Scan()
 				phone = strings.TrimSpace(scanner.Text())
 			} else {
-				fmt.Printf("Using phone number from config: %s\n", phone)
+				fmt.Printf("Using phone number from config")
 			}
 			phoneNumber <- phone
 

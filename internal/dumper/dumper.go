@@ -259,9 +259,7 @@ func (d *Dumper) processAlbum(ctx context.Context, msgs []*client.Message, chatT
 	primary := msgs[len(msgs)-1]
 
 	pd := converter.ConvertMessage(primary, chatTitle, mediaRefs)
-	if urlBase != "" {
-		pd.TelegramURL = fmt.Sprintf("%s/%d", urlBase, primary.Id>>20)
-	}
+	pd.TelegramURL = buildTelegramURL(urlBase, primary.Id)
 
 	// If oldest message has no caption, search the rest for one.
 	if pd.Text == "" {
@@ -307,9 +305,7 @@ func (d *Dumper) processMessage(ctx context.Context, msg *client.Message, chatTi
 	}
 
 	pd := converter.ConvertMessage(msg, chatTitle, mediaRefs)
-	if urlBase != "" {
-		pd.TelegramURL = fmt.Sprintf("%s/%d", urlBase, msg.Id>>20)
-	}
+	pd.TelegramURL = buildTelegramURL(urlBase, msg.Id)
 	mdBytes := converter.Render(pd)
 
 	msgDate := time.Unix(int64(msg.Date), 0).UTC()
@@ -358,6 +354,21 @@ func isNumericID(s string) bool {
 		}
 	}
 	return len(s) > 0
+}
+
+// buildTelegramURL constructs the t.me URL for a message, validating that the
+// message ID uses the expected TDLib encoding (lower 20 bits == 0). Returns an
+// empty string when urlBase is empty or the ID is not aligned, logging a warning
+// in the latter case (e.g. local/scheduled messages that were never actually sent).
+func buildTelegramURL(urlBase string, msgID int64) string {
+	if urlBase == "" {
+		return ""
+	}
+	if msgID&0xFFFFF != 0 {
+		slog.Warn("message ID not aligned, skipping telegram_url", "id", msgID)
+		return ""
+	}
+	return fmt.Sprintf("%s/%d", urlBase, msgID>>20)
 }
 
 // channelURLBase returns the t.me base URL for a channel identifier.

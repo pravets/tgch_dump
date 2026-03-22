@@ -66,7 +66,7 @@ func (d *Dumper) DumpChannel(ctx context.Context, channelID string) error {
 
 	slog.Info("dumping channel", "title", chat.Title, "id", chat.Id)
 
-	urlBase := channelURLBase(channelID)
+	urlBase := d.channelURLBase(chat)
 
 	outDir := filepath.Join(
 		d.cfg.Output.Dir,
@@ -371,18 +371,22 @@ func buildTelegramURL(urlBase string, msgID int64) string {
 	return fmt.Sprintf("%s/%d", urlBase, msgID>>20)
 }
 
-// channelURLBase returns the t.me base URL for a channel identifier.
-// Public  (@username)      → https://t.me/username
-// Private (-1001234567890) → https://t.me/c/1234567890
-func channelURLBase(channelID string) string {
-	if strings.HasPrefix(channelID, "@") {
-		return "https://t.me/" + channelID[1:]
+// channelURLBase returns the t.me base URL for a channel by inspecting the
+// resolved chat data. Public channels with a username get t.me/{username};
+// private channels get t.me/c/{supergroupId}.
+func (d *Dumper) channelURLBase(chat *client.Chat) string {
+	sgType, ok := chat.Type.(*client.ChatTypeSupergroup)
+	if !ok {
+		return ""
 	}
-	// Supergroup/channel numeric IDs have the -100 prefix in TDLib.
-	id := strings.TrimPrefix(channelID, "-100")
-	id = strings.TrimPrefix(id, "-")
-	if id != "" {
-		return "https://t.me/c/" + id
+
+	sg, err := d.tdClient.GetSupergroup(&client.GetSupergroupRequest{
+		SupergroupId: sgType.SupergroupId,
+	})
+	if err == nil && sg.Usernames != nil && len(sg.Usernames.ActiveUsernames) > 0 {
+		return "https://t.me/" + sg.Usernames.ActiveUsernames[0]
 	}
-	return ""
+
+	// Private channel: use t.me/c/{supergroupId}.
+	return fmt.Sprintf("https://t.me/c/%d", sgType.SupergroupId)
 }

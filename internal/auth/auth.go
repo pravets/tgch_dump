@@ -10,6 +10,7 @@ import (
 
 	"github.com/pravets/tgch_dump/internal/config"
 	"github.com/zelenin/go-tdlib/client"
+	"golang.org/x/term"
 )
 
 // NewClient creates an authenticated TDLib client using CLI prompts.
@@ -84,16 +85,40 @@ func interactCLI(
 
 		case client.TypeAuthorizationStateWaitCode:
 			fmt.Print("Enter authentication code: ")
-			scanner.Scan()
-			code <- strings.TrimSpace(scanner.Text())
+			entered, err := readSecret(scanner)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "warning: failed to read code securely: %v\n", err)
+			}
+			code <- entered
 
 		case client.TypeAuthorizationStateWaitPassword:
 			fmt.Print("Enter 2FA cloud password: ")
-			scanner.Scan()
-			password <- strings.TrimSpace(scanner.Text())
+			entered, err := readSecret(scanner)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "warning: failed to read password securely: %v\n", err)
+			}
+			password <- entered
 
 		case client.TypeAuthorizationStateReady:
 			return
 		}
 	}
+}
+
+// readSecret reads a sensitive value from stdin without echoing characters to
+// the terminal. If stdin is not a TTY (e.g. piped input), falls back to
+// bufio.Scanner so non-interactive usage is still possible.
+func readSecret(scanner *bufio.Scanner) (string, error) {
+	fd := int(os.Stdin.Fd())
+	if term.IsTerminal(fd) {
+		b, err := term.ReadPassword(fd)
+		fmt.Println() // term.ReadPassword suppresses the newline
+		if err != nil {
+			return "", err
+		}
+		return strings.TrimSpace(string(b)), nil
+	}
+	// Non-TTY fallback (pipe / redirect).
+	scanner.Scan()
+	return strings.TrimSpace(scanner.Text()), nil
 }

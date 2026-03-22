@@ -153,11 +153,23 @@ func (d *Dumper) fetchMessages(
 			return
 		}
 
+		// When continuing from a previous batch, TDLib includes the boundary
+		// message (fromMessageID) again because Offset must be ≤ 0.  Request
+		// one extra so we still get MessagesPerBatch new messages after
+		// stripping the duplicate.
+		limit := d.cfg.Dump.MessagesPerBatch
+		if fromMessageID != 0 {
+			limit++
+			if limit > 100 {
+				limit = 100
+			}
+		}
+
 		resp, fetchErr := d.tdClient.GetChatHistory(&client.GetChatHistoryRequest{
 			ChatId:        chat.Id,
 			FromMessageId: fromMessageID,
 			Offset:        0,
-			Limit:         d.cfg.Dump.MessagesPerBatch,
+			Limit:         limit,
 			OnlyLocal:     false,
 		})
 		if fetchErr != nil {
@@ -166,12 +178,18 @@ func (d *Dumper) fetchMessages(
 			return
 		}
 
-		if len(resp.Messages) == 0 {
+		msgs := resp.Messages
+		// Strip the boundary message already processed in the previous batch.
+		if fromMessageID != 0 && len(msgs) > 0 && msgs[0].Id == fromMessageID {
+			msgs = msgs[1:]
+		}
+
+		if len(msgs) == 0 {
 			break
 		}
 
 		done := false
-		for _, msg := range resp.Messages {
+		for _, msg := range msgs {
 			if stopAtID > 0 && msg.Id <= stopAtID {
 				flushPending()
 				done = true
@@ -212,7 +230,7 @@ func (d *Dumper) fetchMessages(
 
 		slog.Debug("batch done",
 			"channel", chat.Title,
-			"batch_size", len(resp.Messages),
+			"batch_size", len(msgs),
 			"processed_total", processed,
 			"from_next", fromMessageID,
 		)

@@ -5,6 +5,7 @@ package auth
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -44,19 +45,43 @@ func NewClient(cfg *config.Config) (*client.Client, error) {
 	authorizer := client.ClientAuthorizer(tdlibParams)
 
 	// Launch the interactive prompts in a separate goroutine.
-	go interactCLI(authorizer.State, authorizer.PhoneNumber, authorizer.Code, authorizer.Password, cfg.Telegram.Phone)
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- interactCLI(authorizer.State, authorizer.PhoneNumber, authorizer.Code, authorizer.Password, cfg.Telegram.Phone)
+	}()
 
-	tdClient, err := client.NewClient(
-		authorizer,
-		client.WithLogVerbosity(&client.SetLogVerbosityLevelRequest{
-			NewVerbosityLevel: 0, // suppress most TDLib logs
-		}),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("tdlib authorize: %w", err)
+	type clientResult struct {
+		c   *client.Client
+		err error
 	}
+	resCh := make(chan clientResult, 1)
+	go func() {
+		c, err := client.NewClient(
+			authorizer,
+			client.WithLogVerbosity(&client.SetLogVerbosityLevelRequest{
+				NewVerbosityLevel: 0, // suppress most TDLib logs
+			}),
+		)
+		resCh <- clientResult{c, err}
+	}()
 
-	return tdClient, nil
+	select {
+	case res := <-resCh:
+		if res.err != nil {
+			return nil, fmt.Errorf("tdlib authorize: %w", res.err)
+		}
+		return res.c, nil
+	case err := <-errCh:
+		if err != nil {
+			return nil, fmt.Errorf("interactive auth: %w", err)
+		}
+		// interactCLI finished cleanly; wait for client.NewClient.
+		res := <-resCh
+		if res.err != nil {
+			return nil, fmt.Errorf("tdlib authorize: %w", res.err)
+		}
+		return res.c, nil
+	}
 }
 
 // interactCLI drives the clientAuthorizer channel-based state machine via
@@ -67,7 +92,7 @@ func interactCLI(
 	code chan<- string,
 	password chan<- string,
 	prefilledPhone string,
-) {
+) error {
 	scanner := bufio.NewScanner(os.Stdin)
 
 	for s := range state {
@@ -76,7 +101,9 @@ func interactCLI(
 			phone := prefilledPhone
 			if phone == "" {
 				fmt.Print("Enter phone number (with country code, e.g. +79001234567): ")
-				scanner.Scan()
+				if !scanner.Scan() {
+					return scanError(scanner)
+				}
 				phone = strings.TrimSpace(scanner.Text())
 			} else {
 				fmt.Printf("Using phone number from config")
@@ -87,7 +114,7 @@ func interactCLI(
 			fmt.Print("Enter authentication code: ")
 			entered, err := readSecret(scanner)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "warning: failed to read code securely: %v\n", err)
+				return fmt.Errorf("reading auth code: %w", err)
 			}
 			code <- entered
 
@@ -95,14 +122,18 @@ func interactCLI(
 			fmt.Print("Enter 2FA cloud password: ")
 			entered, err := readSecret(scanner)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "warning: failed to read password securely: %v\n", err)
+				return fmt.Errorf("reading 2FA password: %w", err)
 			}
 			password <- entered
 
 		case client.TypeAuthorizationStateReady:
-			return
+			return nil
+
+		default:
+			return fmt.Errorf("unsupported authorization state: %s", s.AuthorizationStateType())
 		}
 	}
+	return nil
 }
 
 // readSecret reads a sensitive value from stdin without echoing characters to
@@ -119,6 +150,16 @@ func readSecret(scanner *bufio.Scanner) (string, error) {
 		return strings.TrimSpace(string(b)), nil
 	}
 	// Non-TTY fallback (pipe / redirect).
-	scanner.Scan()
+	if !scanner.Scan() {
+		return "", scanError(scanner)
+	}
 	return strings.TrimSpace(scanner.Text()), nil
+}
+
+// scanError returns the scanner's error or io.EOF if the scanner hit end of input.
+func scanError(s *bufio.Scanner) error {
+	if err := s.Err(); err != nil {
+		return fmt.Errorf("reading stdin: %w", err)
+	}
+	return fmt.Errorf("reading stdin: %w", io.EOF)
 }

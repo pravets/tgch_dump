@@ -403,6 +403,8 @@ func reactionKey(rt client.ReactionType) string {
 		return r.Emoji
 	case *client.ReactionTypePaid:
 		return "⭐paid"
+	case *client.ReactionTypeCustomEmoji:
+		return "custom:" + fmt.Sprint(r.CustomEmojiId)
 	default:
 		return "custom"
 	}

@@ -1,0 +1,60 @@
+telegram:
+  # Obtain api_id and api_hash at https://my.telegram.org/apps
+  api_id: 12345678
+  api_hash: "0123456789abcdef0123456789abcdef"
+
+  # Phone number with country code. If omitted, you will be prompted at startup.
+  # You can also set the env variable and reference it below:
+  #   api_id: ${TG_API_ID}
+  #   api_hash: "${TG_API_HASH}"
+  phone: "+79001234567"
+
+  # Where TDLib stores its internal database (sessions, cache, …).
+  database_dir: ".tdlib/db"
+  # Where TDLib caches downloaded files before we copy them to output/.
+  files_dir: ".tdlib/files"
+
+# List of channels to dump.
+# Accepted formats:
+#   @public_channel_username
+#   -1001234567890   (numeric chat ID for private channels / supergroups)
+channels:
+  - "@example_channel"
+  - "-1001234567890"
+
+output:
+  # Root directory for all output files.
+  dir: "./output"
+
+  # Download media files referenced in posts.
+  download_media: true
+
+  # Which media types to download (subset of: photo video audio voice_note document animation).
+  media_types:
+    - photo
+    - video
+    - audio
+    - voice_note
+    - document
+
+  # Write reaction counts to YAML front-matter.
+  include_reactions: true
+  # Write comment count to YAML front-matter.
+  include_comments: true
+  # Write poll data to YAML front-matter.
+  include_polls: true
+
+dump:
+  # Only dump messages newer than the last saved state file (.state.json).
+  # On the very first run all messages are fetched regardless.
+  incremental: true
+
+  # Number of messages fetched per API call (max 100, TDLib hard limit).
+  messages_per_batch: 100
+
+  # Milliseconds to wait between consecutive GetChatHistory requests.
+  # Increase this if you hit rate limits on very large channels.
+  request_delay_ms: 150
+
+  # How many media files to download in parallel.
+  max_concurrent_downloads: 3

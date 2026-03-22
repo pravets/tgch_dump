@@ -149,7 +149,6 @@ func (d *Dumper) fetchMessages(
 
 	for {
 		if err = ctx.Err(); err != nil {
-			flushPending()
 			return
 		}
 
@@ -173,7 +172,6 @@ func (d *Dumper) fetchMessages(
 			OnlyLocal:     false,
 		})
 		if fetchErr != nil {
-			flushPending()
 			err = fmt.Errorf("get chat history (from=%d): %w", fromMessageID, fetchErr)
 			return
 		}

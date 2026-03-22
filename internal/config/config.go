@@ -125,63 +125,6 @@ func (c *Config) validate() error {
 	}
 	return nil
 }
-	}
-
-	// Expand environment variables inside the YAML.
-	expanded := os.ExpandEnv(string(data))
-
-	var cfg Config
-	dec := yaml.NewDecoder(strings.NewReader(expanded))
-	dec.KnownFields(true)
-	if err := dec.Decode(&cfg); err != nil {
-		return nil, fmt.Errorf("parse config: %w", err)
-	}
-
-	cfg.applyDefaults()
-
-	if err := cfg.validate(); err != nil {
-		return nil, fmt.Errorf("invalid config: %w", err)
-	}
-
-	return &cfg, nil
-}
-
-func (c *Config) applyDefaults() {
-	if c.Telegram.DatabaseDir == "" {
-		c.Telegram.DatabaseDir = ".tdlib/db"
-	}
-	if c.Telegram.FilesDir == "" {
-		c.Telegram.FilesDir = ".tdlib/files"
-	}
-	if c.Output.Dir == "" {
-		c.Output.Dir = "./output"
-	}
-	if c.Dump.MessagesPerBatch <= 0 || c.Dump.MessagesPerBatch > 100 {
-		c.Dump.MessagesPerBatch = 100
-	}
-	if c.Dump.RequestDelayMs <= 0 {
-		c.Dump.RequestDelayMs = 150
-	}
-	if c.Dump.MaxConcurrentDownloads <= 0 {
-		c.Dump.MaxConcurrentDownloads = 3
-	}
-	if len(c.Output.MediaTypes) == 0 {
-		c.Output.MediaTypes = []string{"photo", "video", "audio", "voice_note", "document"}
-	}
-}
-
-func (c *Config) validate() error {
-	if c.Telegram.APIID == 0 {
-		return fmt.Errorf("telegram.api_id is required")
-	}
-	if c.Telegram.APIHash == "" {
-		return fmt.Errorf("telegram.api_hash is required")
-	}
-	if len(c.Channels) == 0 {
-		return fmt.Errorf("at least one channel must be listed under 'channels'")
-	}
-	return nil
-}
 
 // MediaTypeEnabled reports whether the given media type (e.g. "photo") should be downloaded.
 func (c *OutputConfig) MediaTypeEnabled(t string) bool {

@@ -55,8 +55,11 @@ jobs:
           git checkout ${{ env.TDLIB_COMMIT }}
           mkdir build && cd build
           cmake -DCMAKE_BUILD_TYPE=Release ..
-          make -j$(nproc)
+          make -j2
           sudo make install
+
+      - name: Verify workspace
+        run: ls cmd/tgch_dump/
 
       - name: Build tgch_dump
         env:

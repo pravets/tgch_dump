@@ -68,7 +68,10 @@ func (d *Dumper) DumpChannel(ctx context.Context, channelID string) error {
 
 	urlBase := channelURLBase(channelID)
 
-	outDir := filepath.Join(d.cfg.Output.Dir, sanitizeName(chat.Title))
+	outDir := filepath.Join(
+		d.cfg.Output.Dir,
+		fmt.Sprintf("%s_%d", sanitizeName(chat.Title), chat.Id),
+	)
 	if err := os.MkdirAll(outDir, 0750); err != nil {
 		return fmt.Errorf("create output dir: %w", err)
 	}
@@ -88,16 +91,15 @@ func (d *Dumper) DumpChannel(ctx context.Context, channelID string) error {
 		return err
 	}
 
-	if lastSuccessfullyWrittenID > st.LastMessageID {
+	if maxID > st.LastMessageID {
 		st.ChannelID = chat.Id
 		st.ChannelName = chat.Title
-		st.LastMessageID = lastSuccessfullyWrittenID
+		st.LastMessageID = maxID
 		st.LastDumpTime = time.Now().UTC()
 		st.TotalMessagesDumped += int64(processed)
 		if saveErr := state.Save(outDir, st); saveErr != nil {
 			slog.Warn("failed to save state", "err", saveErr)
 		}
-	}
 	}
 
 	slog.Info("channel dump complete",
